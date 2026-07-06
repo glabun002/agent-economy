@@ -92,12 +92,12 @@ app.use(paymentMiddleware(paywallConfig, x402Server));
 for (const tool of TOOLS) {
   const path = tool.route.split(" ")[1];
   app.get(path, (_req, res) => {
-    console.log(`[bazaar] payment settled — served ${tool.id} (${tool.price})`);
+    console.log(`[market] payment settled — served ${tool.id} (${tool.price})`);
     res.json(DATA[tool.id]);
   });
 }
 
 app.listen(PORT, () => {
-  console.log(`[bazaar] Data Bazaar listening on http://localhost:${PORT}`);
-  for (const t of TOOLS) console.log(`[bazaar]   ${t.price.padStart(6)}  ${t.name}  (${t.route})`);
+  console.log(`[market] Data Market listening on http://localhost:${PORT}`);
+  for (const t of TOOLS) console.log(`[market]   ${t.price.padStart(6)}  ${t.name}  (${t.route})`);
 });
