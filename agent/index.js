@@ -110,7 +110,8 @@ async function payFor(label, url, amount, payee, options = {}) {
   const response = await fetchWithPayment(url, options);
   const result = await httpClient.processResponse(response);
   if (result.paymentStatus !== "settled") {
-    throw new Error(`payment not settled for ${label}: ${result.paymentStatus}`);
+    const detail = result.header?.errorReason ?? result.header?.errorMessage ?? "";
+    throw new Error(`payment not settled for ${label}: ${result.paymentStatus}${detail ? ` — ${detail}` : ""}`);
   }
   spent += amount;
   const tx = result.header?.transaction;
