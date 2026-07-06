@@ -53,6 +53,18 @@ Defaults run on Base Sepolia (free test USDC from faucet.circle.com).
 Set `CHAIN=base` + `NETWORK=eip155:8453` for Base mainnet — see the
 `.env.example` files. A full run spends $0.40 and takes ~60–90 seconds.
 
+## Stack
+
+- **[Crossmint](https://www.crossmint.com) smart wallets** — each agent has
+  its own wallet with server-side signing; gas is sponsored, so agents hold
+  only USDC
+- **[x402](https://docs.crossmint.com/agents/payment-flows/x402)** — HTTP-native
+  payments: the server answers `402 Payment Required`, the agent pays, retries,
+  and gets the goods
+- **USDC on [Base](https://base.org)** — every payment settles on-chain
+- **[Claude](https://claude.com)** — the judgment layer: buy/skip/hire
+  decisions made under a hard spend policy
+
 ## Why this matters
 
 Everyone demos "an agent that can pay." The interesting problem is an agent
