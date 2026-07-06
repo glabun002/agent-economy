@@ -1,0 +1,411 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Scout — Mission Control</title>
+<style>
+  :root {
+    --bg: #0b0e14; --panel: #121722; --panel2: #171e2c; --line: #232c3f;
+    --text: #dce3f0; --dim: #7d8aa5; --green: #3ddc97; --red: #ff6b6b;
+    --amber: #ffc857; --blue: #6ea8fe; --mono: "SF Mono", ui-monospace, Menlo, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  html, body { height: 100%; }
+  body { background: var(--bg); color: var(--text); font: 15px/1.5 -apple-system, "Segoe UI", sans-serif; overflow: hidden; }
+  header {
+    height: 72px; background: rgba(11,14,20,.95); border-bottom: 1px solid var(--line);
+    padding: 0 24px; display: flex; align-items: center; gap: 24px;
+  }
+  .brand { font-weight: 700; letter-spacing: .04em; white-space: nowrap; font-size: 14px; }
+  .brand .dot { color: var(--green); }
+  .thesis { font-size: 17px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .thesis b { color: var(--green); }
+  .scoreboard { margin-left: auto; text-align: right; min-width: 280px; }
+  .remaining { font-family: var(--mono); }
+  .remaining b { color: var(--green); font-size: 22px; font-weight: 700; }
+  .remaining span { color: var(--dim); font-size: 13px; }
+  /* bar fills AMBER as money is spent (left to right); green = still unspent */
+  .bar { height: 7px; background: linear-gradient(90deg, var(--green), #2bb583); border-radius: 99px; margin-top: 4px; overflow: hidden; }
+  .bar > div { height: 100%; width: 0%; background: var(--amber); border-radius: 99px 0 0 99px; transition: width .6s ease; }
+  .substats { font-family: var(--mono); font-size: 11px; color: var(--dim); margin-top: 4px; }
+  .substats b { color: var(--amber); }
+
+  .layout { display: flex; height: calc(100% - 72px); }
+  #netpanel { flex: 0 0 55%; border-right: 1px solid var(--line); position: relative; background: radial-gradient(ellipse at 30% 40%, #0e1420 0%, var(--bg) 70%); }
+  #net { width: 100%; height: 100%; display: block; }
+  #feed { flex: 1; overflow-y: auto; padding: 18px 16px 60px; display: flex; flex-direction: column; gap: 12px; }
+
+  /* --- network svg --- */
+  .edge { stroke: var(--line); stroke-width: 1.5; fill: none; }
+  .edge.chain { stroke-dasharray: 2 5; opacity: .6; }
+  .edge-label { fill: var(--dim); font: italic 11px -apple-system, sans-serif; text-anchor: middle; opacity: .85; }
+  .node-ring { fill: var(--panel); stroke: var(--line); stroke-width: 1.5; }
+  .node.active .node-ring { stroke: var(--blue); filter: drop-shadow(0 0 10px rgba(110,168,254,.55)); }
+  .node.paid-flash .node-ring { stroke: var(--green); filter: drop-shadow(0 0 12px rgba(61,220,151,.7)); }
+  .node-icon { font-size: 26px; text-anchor: middle; dominant-baseline: central; }
+  .node-name { fill: var(--text); font: 700 13px var(--mono); text-anchor: middle; letter-spacing: .05em; }
+  .node-sub { fill: var(--dim); font: 11px var(--mono); text-anchor: middle; }
+  .node-sub.done { fill: var(--green); }
+  .node-status { fill: var(--blue); font: italic 11px -apple-system, sans-serif; text-anchor: middle; }
+  .pulse-label { font: 10.5px var(--mono); text-anchor: middle; paint-order: stroke; stroke: #0b0e14; stroke-width: 3px; }
+  .chainbar-rect { fill: var(--panel); stroke: var(--line); rx: 10; }
+  .chainbar-title { fill: var(--dim); font: 9px var(--mono); letter-spacing: .12em; }
+  .tick { cursor: pointer; }
+  .net-legend { position: absolute; bottom: 10px; left: 14px; display: flex; gap: 14px; font: 10.5px var(--mono); color: var(--dim); }
+  .net-legend i { display: inline-block; width: 8px; height: 8px; border-radius: 99px; margin-right: 5px; }
+
+  /* --- feed cards --- */
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; animation: pop .35s ease; }
+  @keyframes pop { from { opacity: 0; transform: translateY(10px); } }
+  .tag { font-family: var(--mono); font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--dim); }
+  .tag .stepno { color: var(--green); }
+  .card h3 { margin: 4px 0 2px; font-size: 16px; }
+  .card .sub { color: var(--dim); font-size: 13px; margin-bottom: 4px; }
+  .thinking { color: var(--dim); font-style: italic; border-left: 3px solid var(--line); padding-left: 12px; margin: 8px 0; font-size: 13.5px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+  .chip { font-family: var(--mono); font-size: 11.5px; padding: 3px 9px; border-radius: 99px; border: 1px solid var(--line); }
+  .chip.buy { color: var(--green); border-color: rgba(61,220,151,.35); background: rgba(61,220,151,.07); }
+  .chip.reject { color: var(--red); border-color: rgba(255,107,107,.35); background: rgba(255,107,107,.07); }
+  .card.rejected { border-color: rgba(255,107,107,.5); background: linear-gradient(180deg, rgba(255,107,107,.08), var(--panel) 60%); }
+  .rejected-banner { display: flex; align-items: center; gap: 10px; }
+  .rejected-x { font-size: 26px; color: var(--red); font-weight: 800; }
+  .rejected-title { font-size: 16px; font-weight: 700; }
+  .rejected-price { font-family: var(--mono); color: var(--red); font-weight: 700; font-size: 18px; margin-left: auto; }
+  .rejected-reason { color: #f3a0a0; font-size: 13.5px; margin-top: 8px; }
+  .policy-list { margin-top: 8px; }
+  .policy-list div { display: flex; gap: 8px; padding: 3px 0; font-size: 13.5px; }
+  .policy-list div::before { content: "▸"; color: var(--green); font-family: var(--mono); }
+  .pay { display: flex; align-items: baseline; gap: 12px; }
+  .pay .amt { font-family: var(--mono); font-size: 20px; font-weight: 700; color: var(--amber); }
+  .pay a { color: var(--blue); font-family: var(--mono); font-size: 11.5px; text-decoration: none; }
+  .settled { color: var(--green); font-family: var(--mono); font-size: 11.5px; }
+  .catalog-item { display: flex; gap: 10px; padding: 5px 0; border-bottom: 1px dashed var(--line); font-size: 13px; }
+  .catalog-item:last-child { border-bottom: 0; }
+  .catalog-item .price { font-family: var(--mono); color: var(--amber); min-width: 48px; }
+  .brief { white-space: pre-wrap; background: var(--panel2); border-radius: 8px; padding: 14px 16px; font-size: 15.5px; line-height: 1.7; font-weight: 500; margin-top: 8px; }
+  .receipts { margin-top: 10px; font-family: var(--mono); font-size: 12px; }
+  .receipts div { padding: 2px 0; color: var(--dim); }
+  .receipts b { color: var(--amber); }
+  .final-line { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); font-size: 13.5px; }
+  .final-line b { color: var(--green); }
+  .card.punchline { border-color: rgba(61,220,151,.45); background: linear-gradient(180deg, rgba(61,220,151,.09), var(--panel) 70%); text-align: center; padding: 20px 18px; }
+  .punchline p { font-size: 16.5px; font-weight: 650; line-height: 1.45; }
+  .punchline p b { color: var(--green); }
+  .paywall402 { font-family: var(--mono); color: var(--amber); }
+  .card.paywall-card { border-color: rgba(255,200,87,.5); background: linear-gradient(180deg, rgba(255,200,87,.09), var(--panel) 65%); text-align: center; padding: 18px; animation: pop .35s ease, glow402 1.6s ease .2s; }
+  @keyframes glow402 { 30% { box-shadow: 0 0 34px rgba(255,200,87,.35); } }
+  .p402-code { font: 800 30px var(--mono); color: var(--amber); letter-spacing: .04em; }
+  .p402-title { font-size: 16px; font-weight: 700; margin-top: 2px; }
+  .p402-sub { color: var(--dim); font-size: 13.5px; margin-top: 6px; }
+  .waiting { text-align: center; color: var(--dim); padding: 50px 0; font-style: italic; }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">SCOUT <span class="dot">●</span> <span style="color:var(--dim); font-weight:400">mission control</span></div>
+  <div class="thesis" id="thesis">Waiting for agent…</div>
+  <div class="scoreboard">
+    <div class="remaining"><b id="left">$—</b> <span>remaining of <span id="total">$—</span></span></div>
+    <div class="bar"><div id="barfill"></div></div>
+    <div class="substats" id="substats"></div>
+  </div>
+</header>
+
+<div class="layout">
+  <div id="netpanel">
+    <svg id="net" viewBox="0 0 640 560" preserveAspectRatio="xMidYMid meet">
+      <!-- edges -->
+      <path id="p-scout-bazaar"  class="edge" d="M 200 250 C 300 160, 380 150, 470 150" />
+      <path id="p-scout-analyst" class="edge" d="M 200 290 C 300 380, 380 390, 470 390" />
+      <path id="p-bazaar-chain"  class="edge chain" d="M 520 205 C 520 320, 420 460, 330 492" />
+      <path id="p-analyst-chain" class="edge chain" d="M 520 445 C 500 470, 420 485, 360 492" />
+      <path id="p-scout-chain"   class="edge chain" d="M 150 330 C 160 420, 220 475, 290 492" />
+
+      <!-- edge story labels -->
+      <text class="edge-label" x="330" y="168" transform="rotate(-11 330 168)">buys data →</text>
+      <text class="edge-label" x="330" y="372" transform="rotate(11 330 372)">hires specialist · brief returned →</text>
+
+      <!-- Scout -->
+      <g id="node-scout" class="node">
+        <circle class="node-ring" cx="150" cy="270" r="52" />
+        <text class="node-icon" x="150" y="258">🤖</text>
+        <text class="node-name" x="150" y="288">SCOUT</text>
+        <text class="node-sub"  x="150" y="304" id="scout-sub">buyer agent</text>
+        <text class="node-sub"  x="150" y="320" id="scout-sub2"></text>
+        <text class="node-sub"  x="150" y="336" id="scout-sub3"></text>
+        <text class="node-sub"  x="150" y="358" id="scout-wallet" style="font-size:9.5px"></text>
+        <text class="node-status" x="150" y="200" id="scout-status"></text>
+      </g>
+
+      <!-- Data Bazaar -->
+      <g id="node-bazaar" class="node">
+        <circle class="node-ring" cx="520" cy="150" r="46" />
+        <text class="node-icon" x="520" y="139">🏪</text>
+        <text class="node-name" x="520" y="167">DATA MARKET</text>
+        <text class="node-sub"  x="520" y="182" id="bazaar-sub">3 paid APIs</text>
+        <text class="node-status" x="520" y="86" id="bazaar-status"></text>
+      </g>
+
+      <!-- Analyst-7 -->
+      <g id="node-analyst" class="node">
+        <circle class="node-ring" cx="520" cy="390" r="46" />
+        <text class="node-icon" x="520" y="379">🧠</text>
+        <text class="node-name" x="520" y="407">ANALYST-7</text>
+        <text class="node-sub"  x="520" y="422" id="analyst-sub">earned $0.00</text>
+        <text class="node-status" x="520" y="326" id="analyst-status"></text>
+      </g>
+
+      <!-- settlement bar (narrower so it doesn't pull focus from the agents) -->
+      <g id="chainbar">
+        <rect class="chainbar-rect" x="155" y="478" width="330" height="52" rx="10" />
+        <text class="chainbar-title" x="172" y="497" id="chainbar-title">⛓ BASE SEPOLIA · EVERY PAYMENT SETTLED ON-CHAIN</text>
+        <g id="ticks" transform="translate(172, 505)"></g>
+      </g>
+
+      <g id="fx"></g>
+    </svg>
+    <div class="net-legend">
+      <span><i style="background:var(--blue)"></i>api call</span>
+      <span><i style="background:var(--amber)"></i>402 challenge</span>
+      <span><i style="background:var(--green)"></i>usdc payment</span>
+      <span><i style="background:#9be89b"></i>data</span>
+    </div>
+  </div>
+
+  <main id="feed"><div class="waiting" id="waiting">Waiting for Scout to wake up…</div></main>
+</div>
+
+<script>
+  const feed = document.getElementById("feed");
+  const fx = document.getElementById("fx");
+  const svgNS = "http://www.w3.org/2000/svg";
+  let budget = 1;
+  let spent = 0;
+  let receiptCount = 0;
+  let analystEarned = 0;
+  let bazaarSold = 0;
+  let tickCount = 0;
+  let step = 0;
+  let toolIndex = {}; // id -> {name, price} from catalog
+  let chainLabel = "Base Sepolia";
+  const pageLoad = Date.now();
+  const isReplay = (e) => e.ts && (pageLoad - e.ts > 5000);
+  const fmt = (n) => "$" + Number(n).toFixed(2);
+  const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+  // ---------- network graph ----------
+  const PATHS = {
+    "scout>bazaar": { el: document.getElementById("p-scout-bazaar"), rev: false },
+    "bazaar>scout": { el: document.getElementById("p-scout-bazaar"), rev: true },
+    "scout>analyst": { el: document.getElementById("p-scout-analyst"), rev: false },
+    "analyst>scout": { el: document.getElementById("p-scout-analyst"), rev: true },
+    "bazaar>chain": { el: document.getElementById("p-bazaar-chain"), rev: false },
+    "analyst>chain": { el: document.getElementById("p-analyst-chain"), rev: false },
+    "scout>chain": { el: document.getElementById("p-scout-chain"), rev: false },
+  };
+  const COLORS = { call: "#6ea8fe", challenge: "#ffc857", pay: "#3ddc97", data: "#9be89b" };
+
+  function pulse(route, kind, label, { coin = false, dur = 1100 } = {}) {
+    const path = PATHS[route];
+    if (!path) return;
+    const len = path.el.getTotalLength();
+    const g = document.createElementNS(svgNS, "g");
+    const dot = document.createElementNS(svgNS, "circle");
+    dot.setAttribute("r", coin ? 11 : 5);
+    dot.setAttribute("fill", COLORS[kind]);
+    if (coin) { dot.setAttribute("stroke", "#0b0e14"); dot.setAttribute("stroke-width", "2"); }
+    g.appendChild(dot);
+    let coinTxt;
+    if (coin) {
+      coinTxt = document.createElementNS(svgNS, "text");
+      coinTxt.textContent = "$";
+      coinTxt.setAttribute("style", "font: 700 12px var(--mono); fill: #0b2b1d; text-anchor: middle; dominant-baseline: central;");
+      g.appendChild(coinTxt);
+    }
+    let labelEl;
+    if (label) {
+      labelEl = document.createElementNS(svgNS, "text");
+      labelEl.setAttribute("class", "pulse-label");
+      labelEl.setAttribute("fill", COLORS[kind]);
+      labelEl.textContent = label;
+      g.appendChild(labelEl);
+    }
+    fx.appendChild(g);
+    const t0 = performance.now();
+    (function frame(now) {
+      let t = Math.min(1, (now - t0) / dur);
+      const eased = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+      const p = path.el.getPointAtLength((path.rev ? 1 - eased : eased) * len);
+      dot.setAttribute("cx", p.x); dot.setAttribute("cy", p.y);
+      if (coinTxt) { coinTxt.setAttribute("x", p.x); coinTxt.setAttribute("y", p.y); }
+      if (labelEl) { labelEl.setAttribute("x", p.x); labelEl.setAttribute("y", p.y - 14); }
+      if (t < 1) requestAnimationFrame(frame);
+      else setTimeout(() => g.remove(), 120);
+    })(t0);
+  }
+
+  function setStatus(who, text) {
+    const el = document.getElementById(`${who}-status`);
+    if (el) el.textContent = text ? `💭 ${text}` : "";
+    document.getElementById(`node-${who}`)?.classList.toggle("active", Boolean(text));
+  }
+  function flashPaid(who) {
+    const node = document.getElementById(`node-${who}`);
+    node?.classList.add("paid-flash");
+    setTimeout(() => node?.classList.remove("paid-flash"), 1400);
+  }
+  function addTick(url) {
+    const x = (tickCount % 19) * 15;
+    const r = document.createElementNS(svgNS, "rect");
+    r.setAttribute("class", "tick");
+    r.setAttribute("x", x); r.setAttribute("y", 0);
+    r.setAttribute("width", 11); r.setAttribute("height", 14);
+    r.setAttribute("rx", 2.5); r.setAttribute("fill", "#3ddc97");
+    if (url) r.addEventListener("click", () => window.open(url, "_blank"));
+    document.getElementById("ticks").appendChild(r);
+    tickCount++;
+  }
+  function resetGraph() {
+    analystEarned = 0; bazaarSold = 0; tickCount = 0; spent = 0; receiptCount = 0; step = 0;
+    document.getElementById("ticks").innerHTML = "";
+    document.getElementById("analyst-sub").textContent = "earned $0.00";
+    document.getElementById("bazaar-sub").textContent = "3 paid APIs";
+    document.getElementById("scout-sub2").textContent = "";
+    document.getElementById("scout-sub2").removeAttribute("style");
+    document.getElementById("scout-sub3").textContent = "";
+    document.getElementById("scout-sub").classList.remove("done");
+    ["scout", "bazaar", "analyst"].forEach((w) => setStatus(w, ""));
+    feed.innerHTML = "";
+  }
+  const routeTo = (to) => (to === "analyst" ? "scout>analyst" : "scout>bazaar");
+  const routeFrom = (from) => (from === "analyst" ? "analyst>scout" : "bazaar>scout");
+
+  // ---------- feed ----------
+  function card(tag, title, subtitle, bodyHtml = "", cls = "") {
+    document.getElementById("waiting")?.remove();
+    const el = document.createElement("div");
+    el.className = "card" + (cls ? " " + cls : "");
+    const stepTag = cls.includes("nostep") ? "" : `<span class="stepno">${++step} · </span>`;
+    el.innerHTML = `<div class="tag">${stepTag}${tag}</div>` +
+      (title ? `<h3>${title}</h3>` : "") +
+      (subtitle ? `<div class="sub">${subtitle}</div>` : "") + bodyHtml;
+    feed.appendChild(el);
+    feed.scrollTo({ top: feed.scrollHeight, behavior: "smooth" });
+  }
+  function updateScore(remaining) {
+    document.getElementById("left").textContent = fmt(remaining);
+    const pct = Math.round((spent / budget) * 100);
+    document.getElementById("barfill").style.width = Math.min(100, pct) + "%";
+    document.getElementById("substats").innerHTML =
+      `<b>${fmt(spent)}</b> spent (${pct}%) · ${receiptCount} on-chain receipt${receiptCount === 1 ? "" : "s"}`;
+    document.getElementById("scout-sub").textContent = `budget ${fmt(remaining)}`;
+  }
+
+  const handlers = {
+    mission_start(e) {
+      resetGraph();
+      budget = e.budget;
+      chainLabel = e.chainLabel ?? "Base Sepolia";
+      document.getElementById("chainbar-title").textContent =
+        `⛓ ${chainLabel.toUpperCase()} · EVERY PAYMENT SETTLED ON-CHAIN`;
+      document.getElementById("thesis").innerHTML =
+        `SCOUT has <b>${fmt(e.budget)}</b>. Mission: buy only what's worth it.`;
+      document.getElementById("total").textContent = fmt(e.budget);
+      document.getElementById("scout-wallet").textContent = e.wallet.slice(0, 10) + "…" + e.wallet.slice(-6);
+      updateScore(e.budget);
+      const walletWord = e.mainnet ? "mainnet smart wallet" : "smart wallet";
+      card("mission started", "Agent online",
+        `SCOUT funded with <b style="color:var(--green)">${fmt(e.budget)}</b> · ${walletWord} <span style="font-family:var(--mono); font-size:11.5px">${esc(e.wallet.slice(0, 10))}…${esc(e.wallet.slice(-6))}</span>`);
+      if (e.policy?.length) {
+        card("spend controls", "Budget plan", "The rules SCOUT reasons under — not suggestions.",
+          `<div class="policy-list">${e.policy.map(p => `<div>${esc(p)}</div>`).join("")}</div>`, "nostep");
+      }
+    },
+    call(e, replay) {
+      if (!replay) pulse(routeTo(e.to), "call", e.label);
+    },
+    reply(e, replay) {
+      if (replay) return;
+      if (e.status === 402) pulse(routeFrom(e.from), "challenge", "402 Payment Required");
+      else pulse(routeFrom(e.from), "data", e.label);
+    },
+    thinking(e) { setStatus(e.who, e.label); },
+    thinking_done(e) { setStatus(e.who, ""); },
+    catalog(e) {
+      toolIndex = Object.fromEntries(e.tools.map(t => [t.id, t]));
+      card("marketplace discovered", `${e.tools.length + 1} paid services found`, "Machine-payable, price-per-call, no accounts.",
+        e.tools.map(t => `<div class="catalog-item"><span class="price">${esc(t.price)}</span><span><b>${esc(t.name)}</b> — ${esc(t.description)}</span></div>`).join("") +
+        `<div class="catalog-item"><span class="price">$0.25</span><span><b>${esc(e.analyst.service)}</b> — ${esc(e.analyst.role)}</span></div>`);
+    },
+    decision(e) {
+      const bought = e.buy.length, rejected = e.skip.length;
+      card("agent decision", e.title,
+        rejected ? `Bought ${bought} · rejected ${rejected} overpriced tool${rejected > 1 ? "s" : ""}` : null,
+        `<div class="thinking">“${esc(e.thinking)}”</div>
+        <div class="chips">${e.buy.map(b => `<span class="chip buy">✓ ${esc(toolIndex[b]?.name ?? b)}</span>`).join("")}
+        ${e.skip.map(s => `<span class="chip reject">✗ ${esc(toolIndex[s.id]?.name ?? s.id)}</span>`).join("")}</div>`);
+      for (const s of e.skip) {
+        const t = toolIndex[s.id] ?? { name: s.id, price: "" };
+        card("value judgment", null, null,
+          `<div class="rejected-banner"><span class="rejected-x">✗</span>
+             <span class="rejected-title">REJECTED: ${esc(t.name)}</span>
+             <span class="rejected-price">${esc(t.price)}</span></div>
+           <div class="rejected-reason">${esc(s.reason)}</div>`, "rejected nostep");
+      }
+    },
+    paywall(e) {
+      card("the paywall speaks http", null, null,
+        `<div class="p402-code">HTTP 402</div>
+         <div class="p402-title">Payment Required</div>
+         <div class="p402-sub">No account. No card. Just a wallet.</div>`, "paywall-card");
+    },
+    payment(e, replay) {
+      spent = Number(e.spent);
+      receiptCount++;
+      updateScore(e.remaining);
+      const who = e.payee.includes("Analyst") ? "analyst" : "bazaar";
+      if (who === "analyst") {
+        analystEarned += Number(e.amount);
+        document.getElementById("analyst-sub").textContent = `earned ${fmt(analystEarned)}`;
+      } else {
+        bazaarSold++;
+        document.getElementById("bazaar-sub").textContent = `${bazaarSold} sale${bazaarSold > 1 ? "s" : ""}`;
+      }
+      addTick(e.url);
+      if (!replay) {
+        pulse(routeTo(who), "pay", `−$${e.amount} USDC`, { coin: true, dur: 1400 });
+        setTimeout(() => { flashPaid(who); pulse(`${who}>chain`, "pay", null, { dur: 900 }); }, 1450);
+      }
+      card(who === "analyst" ? "agent hired" : "payment settled",
+        null, null,
+        `<div class="pay"><span class="amt">−$${esc(e.amount)}</span><span>→ ${esc(e.payee)} · ${esc(e.label)}</span></div>
+        <div style="margin-top:5px"><span class="settled">✓ settled on ${esc(chainLabel)}</span> ${e.url ? `&nbsp;<a href="${esc(e.url)}" target="_blank">${esc(e.tx?.slice(0, 22))}…</a>` : ""}</div>`);
+    },
+    data() {},
+    mission_complete(e) {
+      updateScore(e.remaining);
+      ["scout", "bazaar", "analyst"].forEach((w) => setStatus(w, ""));
+      const sub = document.getElementById("scout-sub");
+      sub.textContent = "Mission complete";
+      sub.classList.add("done");
+      const sub2 = document.getElementById("scout-sub2");
+      sub2.textContent = `Spent ${fmt(e.spent)}`;
+      sub2.setAttribute("style", "fill: var(--amber); font-weight: 700");
+      document.getElementById("scout-sub3").textContent = `${fmt(e.remaining)} remaining`;
+      card("mission complete", "Deliverable produced", null,
+        `<div class="brief">${esc(e.brief)}</div>
+        <div class="receipts">${e.receipts.map(r => `<div><b>$${esc(r.amount)}</b> ${esc(r.label)} → ${esc(r.payee)} ${r.url ? `· <a style="color:var(--blue)" href="${esc(r.url)}" target="_blank">tx</a>` : ""}</div>`).join("")}</div>
+        <div class="final-line">Spent <b>${fmt(e.spent)}</b> · <b>${fmt(e.remaining)}</b> remaining · Produced a brief · <b>Every payment settled on-chain.</b></div>`);
+      card("why this matters", null, null,
+        `<p>Soon, agents won't just browse the internet. They'll buy from it.<br/><b>With wallets, budgets, and receipts.</b></p>`, "punchline nostep");
+    },
+  };
+
+  new EventSource("/stream").onmessage = (msg) => {
+    const e = JSON.parse(msg.data);
+    handlers[e.type]?.(e, isReplay(e));
+  };
+</script>
+</body>
+</html>

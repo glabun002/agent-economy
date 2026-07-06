@@ -1,0 +1,9 @@
+{
+  "name": "crossmint-agent-demo",
+  "private": true,
+  "type": "module",
+  "description": "An AI agent with $1, a Crossmint wallet, and judgment — a miniature agent economy on x402",
+  "dependencies": {
+    "@anthropic-ai/sdk": "latest"
+  }
+}

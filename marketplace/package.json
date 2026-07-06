@@ -1,0 +1,17 @@
+{
+  "name": "marketplace",
+  "version": "1.0.0",
+  "description": "Data Bazaar: x402 data tools with one overpriced decoy",
+  "main": "index.js",
+  "scripts": {
+    "start": "node --env-file=.env index.js"
+  },
+  "license": "ISC",
+  "type": "module",
+  "dependencies": {
+    "@x402/core": "^2.17.0",
+    "@x402/evm": "^2.17.0",
+    "@x402/express": "^2.17.0",
+    "express": "^5.2.1"
+  }
+}
