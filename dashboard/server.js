@@ -9,6 +9,12 @@ app.use(express.static(new URL("public", import.meta.url).pathname));
 let history = [];
 const clients = new Set();
 
+// Visit /reset in the browser to wipe the board back to its waiting state.
+app.get("/reset", (_req, res) => {
+  history = [];
+  res.redirect("/");
+});
+
 app.post("/events", (req, res) => {
   const event = req.body;
   if (event?.type === "mission_start") history = []; // fresh run resets the board
