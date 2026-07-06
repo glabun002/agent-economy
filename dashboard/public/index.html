@@ -159,7 +159,7 @@
       <!-- settlement bar (narrower so it doesn't pull focus from the agents) -->
       <g id="chainbar">
         <rect class="chainbar-rect" x="155" y="478" width="330" height="52" rx="10" />
-        <text class="chainbar-title" x="172" y="497" id="chainbar-title">⛓ BASE SEPOLIA · EVERY PAYMENT SETTLED ON-CHAIN</text>
+        <text class="chainbar-title" x="172" y="497" id="chainbar-title">⛓ BASE · EVERY PAYMENT SETTLED ON-CHAIN</text>
         <g id="ticks" transform="translate(172, 505)"></g>
       </g>
 
@@ -188,7 +188,7 @@
   let tickCount = 0;
   let step = 0;
   let toolIndex = {}; // id -> {name, price} from catalog
-  let chainLabel = "Base Sepolia";
+  let chainLabel = "Base";
   const pageLoad = Date.now();
   const isReplay = (e) => e.ts && (pageLoad - e.ts > 5000);
   const fmt = (n) => "$" + Number(n).toFixed(2);
